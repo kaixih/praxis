@@ -84,6 +84,7 @@ PARAMS = 'params'
 AUX_LOSS = 'aux_loss'
 SUMMARIES = 'summaries'
 NON_TRAINABLE = 'non_trainable'
+FP8_PARAMS = 'fp8_params'
 DECODE_CACHE = 'decoder_cache'
 PREFIX_DECODE_CACHE = 'prefix_decoder_cache'
 INTERMEDIATES = 'intermediates'
@@ -101,7 +102,8 @@ NON_PAX_VAR_COLLECTION = ['batch_stats', 'params_axes']
 # by splitting along scan axis using nn.map_variable.
 # The goal is to allow init_vars = layer.init(...) to be fed into
 # layer(init_vars, ...).
-DEFAULT_INIT_MUTABLE_LIST = [PARAMS, NON_TRAINABLE] + NON_PAX_VAR_COLLECTION
+DEFAULT_INIT_MUTABLE_LIST = [PARAMS, NON_TRAINABLE] + NON_PAX_VAR_COLLECTION + \
+                            [FP8_PARAMS]
 
 # A few special Flax RNG stream names.
 RANDOM = 'random'
@@ -167,6 +169,9 @@ def var_not_trainable(var_hparams: ParamsT) -> bool:
   """Returns True if var_hparams is not a trainable variable."""
   return WeightHParamsCollection.NON_TRAINABLE in var_hparams.collections
 
+def var_fp8(var_hparams: ParamsT) -> bool:
+  """Returns True if var_hparams is not a trainable variable."""
+  return FP8_PARAMS in var_hparams.collections
 
 def var_requires_mean_sync(var_hparams: ParamsT) -> bool:
   """Returns True if var_hparams requires synchronization across replicas."""
@@ -1217,6 +1222,14 @@ class Theta:
 
   def __getattr__(self, k):
     self.module._try_setup()
+    if self.module.has_variable(FP8_PARAMS, k):
+      variable = self.module.get_variable(FP8_PARAMS, k)
+      var_hparams = self.module._weight_hparams[k]
+      if (self.module.fprop_dtype == jnp.bfloat16 and
+          var_disallow_bfloat16_conversion(var_hparams)):
+        return variable
+      return self.module._cast_to_fprop_dtype(variable)
+
     if not self.module.has_variable('params', k):
       raise ValueError(f'Module {self.module} has no theta.{k} defined.')
     # Cast BaseLayer.theta to fprop_dtype to ensure BaseLayer.init respects
@@ -2246,7 +2259,14 @@ class BaseLayer(nn.Module):
         value = init_var(var_hparams, prng_key, full_name)
         return BoxedParam(value=value, meta=var_hparams)
 
-      self.param(name, _initializer_fn)
+      if FP8_PARAMS in var_hparams.collections:
+        # We don't care about the PRNG key, since the fp8 params use constant
+        # initializers.
+        init_fn = functools.partial(_initializer_fn,
+                                    prng_key=jrandom.PRNGKey(0))
+        self.variable(FP8_PARAMS, name, init_fn)
+      else:
+        self.param(name, _initializer_fn)
       # Add var to the private theta name set for checks.
       self._theta.add(name)
       return getattr(self.theta, name)
