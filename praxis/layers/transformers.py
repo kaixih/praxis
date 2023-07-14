@@ -40,6 +40,8 @@ from praxis.layers import repeats
 from praxis.layers import stats
 from praxis.layers import stochastics
 
+import fp8layers.praxis as fp8
+
 NestedMap = py_utils.NestedMap
 WeightInit = base_layer.WeightInit
 WeightHParams = base_layer.WeightHParams
@@ -297,7 +299,7 @@ class TransformerFeedForward(base_layer.BaseLayer):
       template_field(activations_lib.ReLU)
   )
   use_gated_activation: bool = False
-  fflayer_tpl: LayerTpl = template_field(linears.FeedForward)
+  fflayer_tpl: LayerTpl = template_field(fp8.FeedForward)
   ln_tpl: LayerTpl = template_field(normalizations.LayerNorm)
   residual_dropout_prob: float = 0.0
   relu_dropout_tpl: LayerTpl = template_field(stochastics.Dropout)
