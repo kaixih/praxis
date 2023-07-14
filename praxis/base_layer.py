@@ -102,7 +102,8 @@ NON_PAX_VAR_COLLECTION = ['batch_stats', 'params_axes']
 # by splitting along scan axis using nn.map_variable.
 # The goal is to allow init_vars = layer.init(...) to be fed into
 # layer(init_vars, ...).
-DEFAULT_INIT_MUTABLE_LIST = [PARAMS, NON_TRAINABLE] + NON_PAX_VAR_COLLECTION
+DEFAULT_INIT_MUTABLE_LIST = [PARAMS, NON_TRAINABLE] + NON_PAX_VAR_COLLECTION + \
+                            [FP8_PARAMS]
 
 # A few special Flax RNG stream names.
 RANDOM = 'random'
