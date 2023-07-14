@@ -27,6 +27,7 @@ from praxis import pytypes
 from praxis.layers import activations
 from praxis.layers import base_ops
 
+import fp8layers.praxis as fp8lib
 
 NestedMap = py_utils.NestedMap
 WeightInit = base_layer.WeightInit
@@ -77,6 +78,8 @@ class Linear(base_layer.BaseLayer):
 
   def setup(self) -> None:
     wp = self.weight_split_dims_mapping
+    print(f"XXX original Linear in={self.input_dims}, out={self.output_dims}, " \
+          f"mesh_shape={self.mesh_shape}, mesh_name={self.mesh_axis_names}, map={wp.wt}")
     self.create_variable(
         'w',
         WeightHParams(

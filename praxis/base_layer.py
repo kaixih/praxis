@@ -84,6 +84,7 @@ PARAMS = 'params'
 AUX_LOSS = 'aux_loss'
 SUMMARIES = 'summaries'
 NON_TRAINABLE = 'non_trainable'
+FP8_PARAMS = 'fp8_params'
 DECODE_CACHE = 'decoder_cache'
 PREFIX_DECODE_CACHE = 'prefix_decoder_cache'
 INTERMEDIATES = 'intermediates'
@@ -1184,6 +1185,11 @@ class Theta:
 
   def __getattr__(self, k):
     self.module._try_setup()
+    if self.module.has_variable(FP8_PARAMS, k):
+      variable = self.module.get_variable(FP8_PARAMS, k)
+      var_hparams = self.module._weight_hparams[k]
+      return self.module._cast_to_fprop_dtype(variable)
+
     if not self.module.has_variable('params', k):
       raise ValueError(f'Module {self.module} has no theta.{k} defined.')
     # Cast BaseLayer.theta to fprop_dtype to ensure BaseLayer.init respects
@@ -2203,7 +2209,14 @@ class BaseLayer(nn.Module):
         value = init_var(var_hparams, prng_key, full_name)
         return BoxedParam(value=value, meta=var_hparams)
 
-      self.param(name, _initializer_fn)
+      if FP8_PARAMS in var_hparams.collections:
+        # We don't care about the PRNG key, since the fp8 params use constant
+        # initializers.
+        init_fn = functools.partial(_initializer_fn,
+                                    prng_key=jrandom.PRNGKey(0))
+        self.variable(FP8_PARAMS, name, init_fn)
+      else:
+        self.param(name, _initializer_fn)
       # Add var to the private theta name set for checks.
       self._theta.add(name)
       return getattr(self.theta, name)
