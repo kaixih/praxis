@@ -27,6 +27,8 @@ from praxis import pytypes
 from praxis.layers import activations
 from praxis.layers import base_ops
 
+import fp8layers.praxis as fp8
+
 NestedMap = py_utils.NestedMap
 WeightInit = base_layer.WeightInit
 WeightHParams = base_layer.WeightHParams
@@ -157,7 +159,7 @@ class FeedForward(base_layer.BaseLayer):
   input_dims: int = 0
   output_dims: int = 0
   has_bias: bool = True
-  linear_tpl: LayerTpl = template_field(Linear)
+  linear_tpl: LayerTpl = template_field(fp8.Linear)
   bias_tpl: LayerTpl = template_field(Bias)
   activation_tpl: pax_fiddle.Config[
       activations.BaseActivation
@@ -178,7 +180,7 @@ class FeedForward(base_layer.BaseLayer):
         activation_split_dims_mapping=ap.clone(),
     )
     # Provide type hint.
-    self.linear: Linear
+    self.linear: fp8.Linear
     self.create_child('linear', linear_layer_p)
     if self.has_bias:
       bias_layer_p = self.bias_tpl.clone()
