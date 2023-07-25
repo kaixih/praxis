@@ -201,7 +201,13 @@ class FeedForward(base_layer.BaseLayer):
     if self.checkpoint_str is not None:
       projected_inputs = checkpoint_name(projected_inputs, self.checkpoint_str)
     if self.has_bias:
-      projected_inputs = self.bias(projected_inputs)
+      if (len(inputs.shape) == 2 and self.bias.dtype == jnp.float32 and
+          self.bias.fprop_dtype == jnp.float32):
+        bias = self.bias.theta.b.astype(jnp.bfloat16)
+        bias = bias.astype(jnp.float32)
+        projected_inputs = projected_inputs + bias
+      else:
+        projected_inputs = self.bias(projected_inputs)
     output = self.activation(projected_inputs)
     return output
 
