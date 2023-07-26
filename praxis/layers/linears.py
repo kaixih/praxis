@@ -27,7 +27,6 @@ from praxis import pytypes
 from praxis.layers import activations
 from praxis.layers import base_ops
 
-import fp8layers.praxis as fp8
 
 NestedMap = py_utils.NestedMap
 WeightInit = base_layer.WeightInit
@@ -159,7 +158,7 @@ class FeedForward(base_layer.BaseLayer):
   input_dims: int = 0
   output_dims: int = 0
   has_bias: bool = True
-  linear_tpl: LayerTpl = template_field(fp8.Linear)
+  linear_tpl: LayerTpl = template_field(Linear)
   bias_tpl: LayerTpl = template_field(Bias)
   activation_tpl: pax_fiddle.Config[
       activations.BaseActivation
@@ -180,7 +179,7 @@ class FeedForward(base_layer.BaseLayer):
         activation_split_dims_mapping=ap.clone(),
     )
     # Provide type hint.
-    self.linear: fp8.Linear
+    self.linear: Linear
     self.create_child('linear', linear_layer_p)
     if self.has_bias:
       bias_layer_p = self.bias_tpl.clone()
@@ -201,13 +200,7 @@ class FeedForward(base_layer.BaseLayer):
     if self.checkpoint_str is not None:
       projected_inputs = checkpoint_name(projected_inputs, self.checkpoint_str)
     if self.has_bias:
-      if (len(inputs.shape) == 2 and self.bias.dtype == jnp.float32 and
-          self.bias.fprop_dtype == jnp.float32):
-        bias = self.bias.theta.b.astype(jnp.bfloat16)
-        bias = bias.astype(jnp.float32)
-        projected_inputs = projected_inputs + bias
-      else:
-        projected_inputs = self.bias(projected_inputs)
+      projected_inputs = self.bias(projected_inputs)
     output = self.activation(projected_inputs)
     return output
 
