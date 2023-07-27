@@ -169,6 +169,9 @@ def var_not_trainable(var_hparams: ParamsT) -> bool:
   """Returns True if var_hparams is not a trainable variable."""
   return WeightHParamsCollection.NON_TRAINABLE in var_hparams.collections
 
+def var_fp8(var_hparams: ParamsT) -> bool:
+  """Returns True if var_hparams is not a trainable variable."""
+  return FP8_PARAMS in var_hparams.collections
 
 def var_requires_mean_sync(var_hparams: ParamsT) -> bool:
   """Returns True if var_hparams requires synchronization across replicas."""
