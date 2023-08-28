@@ -760,32 +760,23 @@ class AttentionProjection(base_layer.BaseLayer):
 
     if self.is_output_projection:
       assert shape[-2:] == (self.num_heads, self.dim_per_head)
-      #batch_eqn = eqn_sym[: (rank - 2)]
-      #if self.use_nhd_shape:
-      #  eqn = f'{batch_eqn}NH,NHD->{batch_eqn}D'
-      #else:
-      #  eqn = f'{batch_eqn}NH,DNH->{batch_eqn}D'
-      ret = fp8.fp8_attention_output_projection(
-          inputs, w, self.use_bias, theta.b,
-          theta.input_scale, theta.input_amax_history,
-          theta.kernel_scale, theta.kernel_amax_history,
-          theta.output_grad_scale, theta.output_grad_amax_history,
-          self.use_nhd_shape)
+      batch_eqn = eqn_sym[: (rank - 2)]
+      if self.use_nhd_shape:
+        eqn = f'{batch_eqn}NH,NHD->{batch_eqn}D'
+      else:
+        eqn = f'{batch_eqn}NH,DNH->{batch_eqn}D'
     else:
       assert (
           shape[-1] == self.input_dim
       ), f'Expecting shape[-1] == p.input_dim, {shape[-1]} != {self.input_dim}'
-      #batch_eqn = eqn_sym[: (rank - 1)] if rank else '...'
-      #eqn = f'{batch_eqn}D,DNH->{batch_eqn}NH'
-      ret = fp8.fp8_qkv_projection(
-          inputs, w, self.use_bias, theta.b,
-          theta.input_scale, theta.input_amax_history,
-          theta.kernel_scale, theta.kernel_amax_history,
-          theta.output_grad_scale, theta.output_grad_amax_history)
-
-    #ret = self.einsum(eqn, inputs, w)
-    #if self.use_bias:
-    #  ret += theta.b
+      batch_eqn = eqn_sym[: (rank - 1)] if rank else '...'
+      eqn = f'{batch_eqn}D,DNH->{batch_eqn}NH'
+    ret = fp8.fp8_einsum(eqn, inputs, w, self.fprop_dtype, theta.input_scale,
+                         theta.input_amax_history, theta.kernel_scale,
+                         theta.kernel_amax_history, theta.output_grad_scale,
+                         theta.output_grad_amax_history)
+    if self.use_bias:
+      ret += theta.b
     return ret
 
   def extend_step(self, inputs: JTensor, *, time_step: JTensor) -> JTensor:
@@ -955,21 +946,17 @@ class CombinedQKVProjectionLayer(base_layer.BaseLayer):
       if self.use_bias:
         b = theta.b
 
-    ## K indexes qkv.
-    #eqn = f'{batch_eqn}D,KDNH->K{batch_eqn}NH'
-    #ret = self.einsum(eqn, inputs, w)
-    #ret = checkpoint_name(ret, 'combined_qkv_proj')
-    #if self.use_bias:
-    #  # Add newaxis to bias weight for each batch dim since ret is K...NH
-    #  # and theta.b is KNH. Need to reshape theta.b to K...NH
-    #  ret += jnp.expand_dims(b, list(range(1, batch_dims_rank + 1)))
-
-    ret = fp8.fp8_qkv_combined_projection(
-          inputs, w, self.use_bias, b,
-          theta.input_scale, theta.input_amax_history,
-          theta.kernel_scale, theta.kernel_amax_history,
-          theta.output_grad_scale, theta.output_grad_amax_history)
-
+    # K indexes qkv.
+    eqn = f'{batch_eqn}D,KDNH->K{batch_eqn}NH'
+    ret = fp8.fp8_einsum(eqn, inputs, w, self.fprop_dtype, theta.input_scale,
+                         theta.input_amax_history, theta.kernel_scale,
+                         theta.kernel_amax_history, theta.output_grad_scale,
+                         theta.output_grad_amax_history)
+    ret = checkpoint_name(ret, 'combined_qkv_proj')
+    if self.use_bias:
+      # Add newaxis to bias weight for each batch dim since ret is K...NH
+      # and theta.b is KNH. Need to reshape theta.b to K...NH
+      ret += jnp.expand_dims(b, list(range(1, batch_dims_rank + 1)))
     # Split into three projections.
     query_proj, key_proj, value_proj = ret
     query_proj = checkpoint_name(query_proj, 'query_proj')
