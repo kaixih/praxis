@@ -35,7 +35,7 @@ from praxis.layers import base_ops
 from praxis.layers import embedding_softmax
 from praxis.layers import stochastics
 
-import fp8layers.flax as fp8
+import fp8layers.praxis as fp8
 
 NestedMap = py_utils.NestedMap
 WeightInit = base_layer.WeightInit
@@ -610,8 +610,7 @@ class AttentionProjection(base_layer.BaseLayer):
   attention_combine_dims: bool = False
   use_nhd_shape: bool = False
   explicit_fan_in_fan_out_axes: bool = False  # TODO(b/232864754) switch to True
-  einsum_tpl: LayerTpl = template_field(base_ops.EinsumOp)
-  amax_history_length: int = 1024
+  einsum_tpl: LayerTpl = template_field(fp8.Fp8EinsumOp)
 
   def setup(self) -> None:
     wp = self.weight_split_dims_mapping
@@ -694,40 +693,6 @@ class AttentionProjection(base_layer.BaseLayer):
         )
       self.create_variable('b', pc_bias)
 
-    scale_args = {
-        'shape': [1],
-        'init': WeightInit.Constant(1.0),
-        'dtype': jnp.float32,
-        'mesh_shape': self.mesh_shape,
-        'tensor_split_dims_mapping': None,
-        'collections': [
-            'fp8_params',
-            base_layer.WeightHParamsCollection.DISALLOW_BFLOAT16_CONVERSION,
-        ],
-    }
-    amax_history_args = {
-        'shape': [self.amax_history_length],
-        'init': WeightInit.Constant(0.0),
-        'dtype': jnp.float32,
-        'mesh_shape': self.mesh_shape,
-        'tensor_split_dims_mapping': None,
-        'collections': [
-            'fp8_params',
-            base_layer.WeightHParamsCollection.DISALLOW_BFLOAT16_CONVERSION,
-        ],
-    }
-    self.create_variable(
-        'input_amax_history', WeightHParams(**amax_history_args))
-    self.create_variable(
-        'kernel_amax_history', WeightHParams(**amax_history_args))
-    self.create_variable(
-        'output_grad_amax_history', WeightHParams(**amax_history_args))
-
-    self.create_variable('input_scale', WeightHParams(**scale_args))
-    self.create_variable('kernel_scale', WeightHParams(**scale_args))
-    self.create_variable(
-         'output_grad_scale', WeightHParams(**scale_args))
-
     self.create_child('einsum', self.einsum_tpl.clone())
 
   def __call__(self, inputs: JTensor) -> JTensor:
@@ -760,32 +725,20 @@ class AttentionProjection(base_layer.BaseLayer):
 
     if self.is_output_projection:
       assert shape[-2:] == (self.num_heads, self.dim_per_head)
-      #batch_eqn = eqn_sym[: (rank - 2)]
-      #if self.use_nhd_shape:
-      #  eqn = f'{batch_eqn}NH,NHD->{batch_eqn}D'
-      #else:
-      #  eqn = f'{batch_eqn}NH,DNH->{batch_eqn}D'
-      ret = fp8.fp8_attention_output_projection(
-          inputs, w, self.use_bias, theta.b,
-          theta.input_scale, theta.input_amax_history,
-          theta.kernel_scale, theta.kernel_amax_history,
-          theta.output_grad_scale, theta.output_grad_amax_history,
-          self.use_nhd_shape)
+      batch_eqn = eqn_sym[: (rank - 2)]
+      if self.use_nhd_shape:
+        eqn = f'{batch_eqn}NH,NHD->{batch_eqn}D'
+      else:
+        eqn = f'{batch_eqn}NH,DNH->{batch_eqn}D'
     else:
       assert (
           shape[-1] == self.input_dim
       ), f'Expecting shape[-1] == p.input_dim, {shape[-1]} != {self.input_dim}'
-      #batch_eqn = eqn_sym[: (rank - 1)] if rank else '...'
-      #eqn = f'{batch_eqn}D,DNH->{batch_eqn}NH'
-      ret = fp8.fp8_qkv_projection(
-          inputs, w, self.use_bias, theta.b,
-          theta.input_scale, theta.input_amax_history,
-          theta.kernel_scale, theta.kernel_amax_history,
-          theta.output_grad_scale, theta.output_grad_amax_history)
-
-    #ret = self.einsum(eqn, inputs, w)
-    #if self.use_bias:
-    #  ret += theta.b
+      batch_eqn = eqn_sym[: (rank - 1)] if rank else '...'
+      eqn = f'{batch_eqn}D,DNH->{batch_eqn}NH'
+    ret = self.einsum(eqn, inputs, w)
+    if self.use_bias:
+      ret += theta.b
     return ret
 
   def extend_step(self, inputs: JTensor, *, time_step: JTensor) -> JTensor:
@@ -817,8 +770,7 @@ class CombinedQKVProjectionLayer(base_layer.BaseLayer):
   use_bias: bool = True
   attention_combine_dims: bool = False
   explicit_fan_in_fan_out_axes: bool = False  # TODO(b/232864754) switch to True
-  einsum_tpl: LayerTpl = template_field(base_ops.EinsumOp)
-  amax_history_length: int = 1024
+  einsum_tpl: LayerTpl = template_field(fp8.Fp8EinsumOp)
 
   def setup(self) -> None:
     # Sharding has the same convention of AttentionProjection, which doesn't
@@ -884,41 +836,6 @@ class CombinedQKVProjectionLayer(base_layer.BaseLayer):
           tensor_split_dims_mapping=bias_split_dims_mapping,
       )
       self.create_variable('b', pc_bias)
-
-    scale_args = {
-        'shape': [1],
-        'init': WeightInit.Constant(1.0),
-        'dtype': jnp.float32,
-        'mesh_shape': self.mesh_shape,
-        'tensor_split_dims_mapping': None,
-        'collections': [
-            'fp8_params',
-            base_layer.WeightHParamsCollection.DISALLOW_BFLOAT16_CONVERSION,
-        ],
-    }
-    amax_history_args = {
-        'shape': [self.amax_history_length],
-        'init': WeightInit.Constant(0.0),
-        'dtype': jnp.float32,
-        'mesh_shape': self.mesh_shape,
-        'tensor_split_dims_mapping': None,
-        'collections': [
-            'fp8_params',
-            base_layer.WeightHParamsCollection.DISALLOW_BFLOAT16_CONVERSION,
-        ],
-    }
-    self.create_variable(
-        'input_amax_history', WeightHParams(**amax_history_args))
-    self.create_variable(
-        'kernel_amax_history', WeightHParams(**amax_history_args))
-    self.create_variable(
-        'output_grad_amax_history', WeightHParams(**amax_history_args))
-
-    self.create_variable('input_scale', WeightHParams(**scale_args))
-    self.create_variable('kernel_scale', WeightHParams(**scale_args))
-    self.create_variable(
-         'output_grad_scale', WeightHParams(**scale_args))
-
     self.create_child('einsum', self.einsum_tpl.clone())
 
   # TODO(zhangqiaorjc): Take query, key, value as inputs to support all
@@ -955,21 +872,14 @@ class CombinedQKVProjectionLayer(base_layer.BaseLayer):
       if self.use_bias:
         b = theta.b
 
-    ## K indexes qkv.
-    #eqn = f'{batch_eqn}D,KDNH->K{batch_eqn}NH'
-    #ret = self.einsum(eqn, inputs, w)
-    #ret = checkpoint_name(ret, 'combined_qkv_proj')
-    #if self.use_bias:
-    #  # Add newaxis to bias weight for each batch dim since ret is K...NH
-    #  # and theta.b is KNH. Need to reshape theta.b to K...NH
-    #  ret += jnp.expand_dims(b, list(range(1, batch_dims_rank + 1)))
-
-    ret = fp8.fp8_qkv_combined_projection(
-          inputs, w, self.use_bias, b,
-          theta.input_scale, theta.input_amax_history,
-          theta.kernel_scale, theta.kernel_amax_history,
-          theta.output_grad_scale, theta.output_grad_amax_history)
-
+    # K indexes qkv.
+    eqn = f'{batch_eqn}D,KDNH->K{batch_eqn}NH'
+    ret = self.einsum(eqn, inputs, w)
+    ret = checkpoint_name(ret, 'combined_qkv_proj')
+    if self.use_bias:
+      # Add newaxis to bias weight for each batch dim since ret is K...NH
+      # and theta.b is KNH. Need to reshape theta.b to K...NH
+      ret += jnp.expand_dims(b, list(range(1, batch_dims_rank + 1)))
     # Split into three projections.
     query_proj, key_proj, value_proj = ret
     query_proj = checkpoint_name(query_proj, 'query_proj')

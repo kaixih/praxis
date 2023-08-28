@@ -299,7 +299,7 @@ class TransformerFeedForward(base_layer.BaseLayer):
       template_field(activations_lib.ReLU)
   )
   use_gated_activation: bool = False
-  fflayer_tpl: LayerTpl = template_field(fp8.FeedForward)
+  fflayer_tpl: LayerTpl = template_field(linears.FeedForward)
   ln_tpl: LayerTpl = template_field(normalizations.LayerNorm)
   residual_dropout_prob: float = 0.0
   relu_dropout_tpl: LayerTpl = template_field(stochastics.Dropout)
@@ -371,6 +371,7 @@ class TransformerFeedForward(base_layer.BaseLayer):
 
     # Create the first Feedforward layer mapping to hidden dims
     ffn1_p = self.fflayer_tpl.clone()
+    ffn1_p.linear_tpl.einsum_tpl = pax_fiddle.Config(fp8.Fp8EinsumOp)
     ffn1_p.name = 'ffn_layer1'
     ffn1_p.input_dims = self.input_dims
     ffn1_p.has_bias = self.has_bias
@@ -387,6 +388,7 @@ class TransformerFeedForward(base_layer.BaseLayer):
     if self._is_ffn1_gated:
       # This is a gated ffw network, corresponding to gshard_builder's wi0
       gate_p = self.fflayer_tpl.clone()
+      gate_p.linear_tpl.einsum_tpl = pax_fiddle.Config(fp8.Fp8EinsumOp)
       gate_p.name = 'ffn_layer1_gate'
       gate_p.input_dims = self.input_dims
       gate_p.has_bias = self.has_bias
@@ -406,6 +408,7 @@ class TransformerFeedForward(base_layer.BaseLayer):
 
     # Create the second Feedforward layer mapping to input dims
     ffn2_p = self.fflayer_tpl.clone()
+    ffn2_p.linear_tpl.einsum_tpl = pax_fiddle.Config(fp8.Fp8EinsumOp)
     ffn2_p.name = 'ffn_layer2'
     ffn2_p.input_dims = self.hidden_dims
     ffn2_p.has_bias = self.has_bias
