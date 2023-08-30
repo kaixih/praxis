@@ -41,7 +41,6 @@ SplitDimsMapping = pytypes.SplitDimsMapping
 LayerTpl = pax_fiddle.Config[base_layer.BaseLayer]
 
 PARAMS = base_layer.PARAMS
-FP8_PARAMS = base_layer.FP8_PARAMS
 
 AUX_LOSS = base_layer.AUX_LOSS
 SUMMARIES = base_layer.SUMMARIES
@@ -55,7 +54,6 @@ AutodiffCheckpointType = checkpoint_policy.AutodiffCheckpointType
 
 SCAN_VARIABLE_AXES = {
     PARAMS: 0,
-    FP8_PARAMS: 0,
     AUX_LOSS: 0,
     SUMMARIES: 0,
     NON_TRAINABLE: 0,
