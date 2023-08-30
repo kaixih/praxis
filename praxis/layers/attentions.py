@@ -35,8 +35,6 @@ from praxis.layers import base_ops
 from praxis.layers import embedding_softmax
 from praxis.layers import stochastics
 
-import fp8layers.praxis as fp8
-
 NestedMap = py_utils.NestedMap
 WeightInit = base_layer.WeightInit
 WeightHParams = base_layer.WeightHParams
@@ -610,7 +608,7 @@ class AttentionProjection(base_layer.BaseLayer):
   attention_combine_dims: bool = False
   use_nhd_shape: bool = False
   explicit_fan_in_fan_out_axes: bool = False  # TODO(b/232864754) switch to True
-  einsum_tpl: LayerTpl = template_field(fp8.Fp8EinsumOp)
+  einsum_tpl: LayerTpl = template_field(base_ops.EinsumOp)
 
   def setup(self) -> None:
     wp = self.weight_split_dims_mapping
@@ -770,7 +768,7 @@ class CombinedQKVProjectionLayer(base_layer.BaseLayer):
   use_bias: bool = True
   attention_combine_dims: bool = False
   explicit_fan_in_fan_out_axes: bool = False  # TODO(b/232864754) switch to True
-  einsum_tpl: LayerTpl = template_field(fp8.Fp8EinsumOp)
+  einsum_tpl: LayerTpl = template_field(base_ops.EinsumOp)
 
   def setup(self) -> None:
     # Sharding has the same convention of AttentionProjection, which doesn't

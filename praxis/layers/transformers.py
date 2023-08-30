@@ -40,8 +40,6 @@ from praxis.layers import repeats
 from praxis.layers import stats
 from praxis.layers import stochastics
 
-import fp8layers.praxis as fp8
-
 NestedMap = py_utils.NestedMap
 WeightInit = base_layer.WeightInit
 WeightHParams = base_layer.WeightHParams
@@ -371,7 +369,6 @@ class TransformerFeedForward(base_layer.BaseLayer):
 
     # Create the first Feedforward layer mapping to hidden dims
     ffn1_p = self.fflayer_tpl.clone()
-    ffn1_p.linear_tpl.einsum_tpl = pax_fiddle.Config(fp8.Fp8EinsumOp)
     ffn1_p.name = 'ffn_layer1'
     ffn1_p.input_dims = self.input_dims
     ffn1_p.has_bias = self.has_bias
@@ -388,7 +385,6 @@ class TransformerFeedForward(base_layer.BaseLayer):
     if self._is_ffn1_gated:
       # This is a gated ffw network, corresponding to gshard_builder's wi0
       gate_p = self.fflayer_tpl.clone()
-      gate_p.linear_tpl.einsum_tpl = pax_fiddle.Config(fp8.Fp8EinsumOp)
       gate_p.name = 'ffn_layer1_gate'
       gate_p.input_dims = self.input_dims
       gate_p.has_bias = self.has_bias
@@ -408,7 +404,6 @@ class TransformerFeedForward(base_layer.BaseLayer):
 
     # Create the second Feedforward layer mapping to input dims
     ffn2_p = self.fflayer_tpl.clone()
-    ffn2_p.linear_tpl.einsum_tpl = pax_fiddle.Config(fp8.Fp8EinsumOp)
     ffn2_p.name = 'ffn_layer2'
     ffn2_p.input_dims = self.hidden_dims
     ffn2_p.has_bias = self.has_bias
