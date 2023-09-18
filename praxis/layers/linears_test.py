@@ -500,6 +500,8 @@ class LinearsTest(test_utils.TestCase):
     expected_shapes_new = {
         'params': {
             'w': (32, 64),
+        },
+        'non_trainable': {
             'einsum': {'input_amax_history': (1024,),
                        'input_scale': (1,),
                        'kernel_amax_history': (1024,),

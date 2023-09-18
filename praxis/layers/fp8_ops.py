@@ -159,16 +159,21 @@ class Fp8EinsumOp(base_layer.BaseLayer):
         'collections': ['fp8_params'],
     }
     self.create_variable(
-        'input_amax_history', WeightHParams(**amax_history_args))
+        'input_amax_history', WeightHParams(**amax_history_args),
+        trainable=False)
     self.create_variable(
-        'kernel_amax_history', WeightHParams(**amax_history_args))
+        'kernel_amax_history', WeightHParams(**amax_history_args),
+        trainable=False)
     self.create_variable(
-        'output_grad_amax_history', WeightHParams(**amax_history_args))
+        'output_grad_amax_history', WeightHParams(**amax_history_args),
+        trainable=False)
 
-    self.create_variable('input_scale', WeightHParams(**scale_args))
-    self.create_variable('kernel_scale', WeightHParams(**scale_args))
+    self.create_variable('input_scale', WeightHParams(**scale_args),
+                         trainable=False)
+    self.create_variable('kernel_scale', WeightHParams(**scale_args),
+                         trainable=False)
     self.create_variable(
-         'output_grad_scale', WeightHParams(**scale_args))
+         'output_grad_scale', WeightHParams(**scale_args), trainable=False)
 
   def __call__(self, equation: str, *args: JTensor) -> JTensor:
 
@@ -183,9 +188,10 @@ class Fp8EinsumOp(base_layer.BaseLayer):
     x = jnp.asarray(x, comp_dtype)
 
     theta = self.theta
-    out = fp8_einsum(equation, x, k, comp_dtype, theta.input_scale,
-                     theta.input_amax_history, theta.kernel_scale,
-                     theta.kernel_amax_history, theta.output_grad_scale,
-                     theta.output_grad_amax_history)
+    out = fp8_einsum(
+        equation, x, k, comp_dtype, self.get_var('input_scale'),
+        self.get_var('input_amax_history'), self.get_var('kernel_scale'),
+        self.get_var('kernel_amax_history'), self.get_var('output_grad_scale'),
+        self.get_var('output_grad_amax_history'))
     return out
 
