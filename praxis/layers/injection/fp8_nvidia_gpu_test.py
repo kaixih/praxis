@@ -86,11 +86,8 @@ class Fp8LinearsTest(test_utils.TestCase):
             'w': (32, 64),
             'einsum': {
                 'input_amax_history': (1024,),
-                'input_scale': (1,),
                 'kernel_amax_history': (1024,),
-                'kernel_scale': (1,),
                 'output_grad_amax_history': (1024,),
-                'output_grad_scale': (1,),
             },
         }
     }
