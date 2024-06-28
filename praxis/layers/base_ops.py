@@ -18,11 +18,14 @@
 This is useful for quantization, sparsity and possibly other techniques.
 """
 
+from typing import Sequence
+
 import jax.numpy as jnp
 from praxis import base_layer
 from praxis import pytypes
 
 JTensor = pytypes.JTensor
+SplitDimsMapping = pytypes.SplitDimsMapping
 
 
 # These wrappers allow (with a help of fiddle) to inject custom ops
@@ -38,7 +41,11 @@ JTensor = pytypes.JTensor
 class EinsumOp(base_layer.BaseLayer):
   """Wrapper around jnp.einsum used in standard Pax layers."""
 
-  def __call__(self, equation: str, *args: JTensor) -> JTensor:
+  def __call__(self, equation: str, *args: JTensor,
+               split_dims_mapping: SplitDimsMapping = None,
+               mesh_axis_names: Sequence[str] | None = None) -> JTensor:
+    base_layer.maybe_shard(args[0], split_dims_mapping, mesh_axis_names)
+    base_layer.maybe_shard(args[1], split_dims_mapping, mesh_axis_names)
     return jnp.einsum(equation, *args)
 
 

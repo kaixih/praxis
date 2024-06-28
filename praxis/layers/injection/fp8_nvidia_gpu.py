@@ -30,6 +30,7 @@
 
 """Op wrappers to support FP8 GEMMs."""
 
+from typing import Sequence
 from functools import partial
 
 from flax.linen import fp8_ops
@@ -41,6 +42,8 @@ from praxis import layers
 from praxis import pax_fiddle
 from praxis import pytypes
 
+JTensor = pytypes.JTensor
+SplitDimsMapping = pytypes.SplitDimsMapping
 
 class Fp8EinsumOp(base_layer.BaseLayer):
   """Wrapper around jnp.einsum used in standard Pax layers."""
@@ -84,7 +87,9 @@ class Fp8EinsumOp(base_layer.BaseLayer):
         'output_grad_scale', base_layer.WeightHParams(**scale_args)
     )
 
-  def __call__(self, equation: str, *args: pytypes.JTensor) -> pytypes.JTensor:
+  def __call__(self, equation: str, *args: JTensor,
+               split_dims_mapping: SplitDimsMapping = None,
+               mesh_axis_names: Sequence[str] | None = None) -> JTensor:
     assert len(args) == 2
     x = args[0]
     k = args[1]
@@ -103,6 +108,9 @@ class Fp8EinsumOp(base_layer.BaseLayer):
     k_qdq = fp8_ops.in_qdq(
         comp_dtype, k, theta.kernel_scale, theta.kernel_amax_history
     )
+
+    base_layer.maybe_shard(x_qdq, split_dims_mapping, mesh_axis_names)
+    base_layer.maybe_shard(k_qdq, split_dims_mapping, mesh_axis_names)
     y_qdq = jnp.einsum(
         equation, x_qdq, k_qdq, _dot_general=fp8_ops.dot_general_with_precision
     )

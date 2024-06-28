@@ -1029,10 +1029,10 @@ class TransformerFeedForwardMoe(base_layer.BaseLayer):
 
     # both tensors have shape [g, s, e, c]
     if self.gating_func in ['top2', 'expert_choice_v2']:
-      combine_tensor = self._split(combine_tensor, ap.gsec)
-      dispatch_tensor = self._split(dispatch_tensor, ap.gsec)
       expert_inputs = self.einsum(
-          'gsec,gsm->egcm', dispatch_tensor, reshaped_inputs
+          'gsec,gsm->egcm', dispatch_tensor, reshaped_inputs,
+          split_dims_mapping=ap.gsec,
+          mesh_axis_names=self.mesh_axis_names,
       )
     elif self.gating_func == 'expert_choice':
       combine_tensor = self._split(combine_tensor, ap.gec)
