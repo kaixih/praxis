@@ -89,7 +89,8 @@ class Fp8EinsumOp(base_layer.BaseLayer):
 
   def __call__(self, equation: str, *args: JTensor,
                split_dims_mapping: SplitDimsMapping = None,
-               mesh_axis_names: Sequence[str] | None = None) -> JTensor:
+               mesh_axis_names: Sequence[str] | None = None,
+               shard_both: bool | None = None) -> JTensor:
     assert len(args) == 2
     x = args[0]
     k = args[1]
@@ -109,8 +110,13 @@ class Fp8EinsumOp(base_layer.BaseLayer):
         comp_dtype, k, theta.kernel_scale, theta.kernel_amax_history
     )
 
-    base_layer.maybe_shard(x_qdq, split_dims_mapping, mesh_axis_names)
-    base_layer.maybe_shard(k_qdq, split_dims_mapping, mesh_axis_names)
+    if shard_both is not None:
+      if shard_both:
+        base_layer.maybe_shard(x_qdq, split_dims_mapping, mesh_axis_names)
+        base_layer.maybe_shard(k_qdq, split_dims_mapping, mesh_axis_names)
+      else:
+        base_layer.maybe_shard(x_qdq, split_dims_mapping, mesh_axis_names)
+
     y_qdq = jnp.einsum(
         equation, x_qdq, k_qdq, _dot_general=fp8_ops.dot_general_with_precision
     )

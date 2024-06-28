@@ -43,9 +43,15 @@ class EinsumOp(base_layer.BaseLayer):
 
   def __call__(self, equation: str, *args: JTensor,
                split_dims_mapping: SplitDimsMapping = None,
-               mesh_axis_names: Sequence[str] | None = None) -> JTensor:
-    base_layer.maybe_shard(args[0], split_dims_mapping, mesh_axis_names)
-    base_layer.maybe_shard(args[1], split_dims_mapping, mesh_axis_names)
+               mesh_axis_names: Sequence[str] | None = None,
+               shard_both: bool | None = None) -> JTensor:
+    if shard_both is not None:
+      if shard_both:
+        base_layer.maybe_shard(args[0], split_dims_mapping, mesh_axis_names)
+        base_layer.maybe_shard(args[1], split_dims_mapping, mesh_axis_names)
+      else:
+        base_layer.maybe_shard(args[0], split_dims_mapping, mesh_axis_names)
+
     return jnp.einsum(equation, *args)
 
 

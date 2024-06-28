@@ -1033,6 +1033,7 @@ class TransformerFeedForwardMoe(base_layer.BaseLayer):
           'gsec,gsm->egcm', dispatch_tensor, reshaped_inputs,
           split_dims_mapping=ap.gsec,
           mesh_axis_names=self.mesh_axis_names,
+          shard_both=True,
       )
     elif self.gating_func == 'expert_choice':
       combine_tensor = self._split(combine_tensor, ap.gec)
@@ -1042,16 +1043,26 @@ class TransformerFeedForwardMoe(base_layer.BaseLayer):
       )
     else:
       raise ValueError('Unsupported gating function: %s ' % self.gating_func)
-    expert_inputs = self._split(expert_inputs, ap.egcm)
 
     if self._is_ffn1_gated:
-      hidden0 = self.einsum('egcm,emh->egch', expert_inputs, theta_wi)
-      hidden1 = self.einsum('egcm,emh->egch', expert_inputs, theta_wi_gated)
+      hidden0 = self.einsum(
+          'egcm,emh->egch', expert_inputs, theta_wi,
+          split_dims_mapping=ap.egcm,
+          mesh_axis_names=self.mesh_axis_names,
+          shard_both=False,
+      )
+      hidden1 = self.einsum(
+          'egcm,emh->egch', expert_inputs, theta_wi_gated,
+          split_dims_mapping=ap.egcm,
+          mesh_axis_names=self.mesh_axis_names,
+          shard_both=False,
+      )
       if self.gating_func in ['top2', 'expert_choice_v2']:
         self._count_dead_neurons(hidden1, dispatch_tensor)
       hidden1 = self.activation(hidden1)
       hidden = hidden1 * hidden0
     else:
+      expert_inputs = self._split(expert_inputs, ap.egcm)
       hidden = jnp.einsum('egcm,emh->egch', expert_inputs, theta_wi)
       hidden = self._split(hidden, ap.egch)
       if self.gating_func in ['top2', 'expert_choice_v2']:
