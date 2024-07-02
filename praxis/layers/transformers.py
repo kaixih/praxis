@@ -943,7 +943,6 @@ class TransformerFeedForwardMoe(base_layer.BaseLayer):
     g_len = num_tokens // num_groups
 
     reshaped_inputs = inputs.reshape([num_groups, g_len, m_dim])
-    reshaped_inputs = self._split(reshaped_inputs, ap.gsm)
     if paddings is not None:
       reshaped_paddings = paddings.reshape([num_groups, g_len])
       reshaped_paddings = self._split(reshaped_paddings, ap.gs)
@@ -975,6 +974,7 @@ class TransformerFeedForwardMoe(base_layer.BaseLayer):
           'gsm,me->gse', reshaped_sentence_embeddings, self.theta.gate
       )
     else:
+      reshaped_inputs = self._split(reshaped_inputs, ap.gsm)
       logits = jnp.einsum('gsm,me->gse', reshaped_inputs, self.theta.gate)
 
     # Here and below, we assume num devices equals num groups.
@@ -1039,6 +1039,7 @@ class TransformerFeedForwardMoe(base_layer.BaseLayer):
     elif self.gating_func == 'expert_choice':
       combine_tensor = self._split(combine_tensor, ap.gec)
       dispatch_tensor = self._split(dispatch_tensor, ap.gecs)
+      reshaped_inputs = self._split(reshaped_inputs, ap.gsm)
       expert_inputs = jnp.einsum(
           'gecs,gsm->egcm', dispatch_tensor, reshaped_inputs
       )
