@@ -1029,11 +1029,12 @@ class TransformerFeedForwardMoe(base_layer.BaseLayer):
 
     # both tensors have shape [g, s, e, c]
     if self.gating_func in ['top2', 'expert_choice_v2']:
+      combine_tensor = self._split(combine_tensor, ap.gsec)
       expert_inputs = self.einsum(
           'gsec,gsm->egcm', dispatch_tensor, reshaped_inputs,
-          split_dims_mapping=ap.gsec,
+          lhs_split_dims_mapping=ap.gsec,
+          rhs_split_dims_mapping=ap.gsm,
           mesh_axis_names=self.mesh_axis_names,
-          shard_both=True,
       )
     elif self.gating_func == 'expert_choice':
       combine_tensor = self._split(combine_tensor, ap.gec)
@@ -1047,15 +1048,13 @@ class TransformerFeedForwardMoe(base_layer.BaseLayer):
     if self._is_ffn1_gated:
       hidden0 = self.einsum(
           'egcm,emh->egch', expert_inputs, theta_wi,
-          split_dims_mapping=ap.egcm,
+          lhs_split_dims_mapping=ap.egcm,
           mesh_axis_names=self.mesh_axis_names,
-          shard_both=False,
       )
       hidden1 = self.einsum(
           'egcm,emh->egch', expert_inputs, theta_wi_gated,
-          split_dims_mapping=ap.egcm,
+          lhs_split_dims_mapping=ap.egcm,
           mesh_axis_names=self.mesh_axis_names,
-          shard_both=False,
       )
       if self.gating_func in ['top2', 'expert_choice_v2']:
         self._count_dead_neurons(hidden1, dispatch_tensor)

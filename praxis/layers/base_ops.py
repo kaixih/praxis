@@ -42,15 +42,13 @@ class EinsumOp(base_layer.BaseLayer):
   """Wrapper around jnp.einsum used in standard Pax layers."""
 
   def __call__(self, equation: str, *args: JTensor,
-               split_dims_mapping: SplitDimsMapping = None,
-               mesh_axis_names: Sequence[str] | None = None,
-               shard_both: bool | None = None) -> JTensor:
-    if shard_both is not None:
-      if shard_both:
-        base_layer.maybe_shard(args[0], split_dims_mapping, mesh_axis_names)
-        base_layer.maybe_shard(args[1], split_dims_mapping, mesh_axis_names)
-      else:
-        base_layer.maybe_shard(args[0], split_dims_mapping, mesh_axis_names)
+               lhs_split_dims_mapping: SplitDimsMapping = None,
+               rhs_split_dims_mapping: SplitDimsMapping = None,
+               mesh_axis_names: Sequence[str] | None = None) -> JTensor:
+    if lhs_split_dims_mapping is not None:
+      base_layer.maybe_shard(args[0], lhs_split_dims_mapping, mesh_axis_names)
+    if rhs_split_dims_mapping is not None:
+      base_layer.maybe_shard(args[1], rhs_split_dims_mapping, mesh_axis_names)
 
     return jnp.einsum(equation, *args)
 
