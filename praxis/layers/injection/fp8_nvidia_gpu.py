@@ -212,3 +212,78 @@ class Fp8EinsumGatedOp(Fp8EinsumOp):
     )
 
     return y, y_gated
+
+class Fp8EinsumDispatchOp(base_layer.BaseLayer):
+  """Wrapper around jnp.einsum used in standard Pax layers."""
+
+  amax_history_length: int = 1024
+
+  def setup(self) -> None:
+    scale_args, amax_history_args = _get_fp8_args(
+        self.amax_history_length, self.mesh_shape
+    )
+
+    self.create_variable(
+        'kernel_amax_history', base_layer.WeightHParams(**amax_history_args)
+    )
+    self.create_variable(
+        'output_grad_amax_history',
+        base_layer.WeightHParams(**amax_history_args),
+    )
+
+    self.create_variable('kernel_scale', base_layer.WeightHParams(**scale_args))
+    self.create_variable(
+        'output_grad_scale', base_layer.WeightHParams(**scale_args)
+    )
+
+  def quantized_einsum(
+      self, equation: str, x: JTensor, k: JTensor, return_quantized_x: bool
+  ) -> JTensor | tuple[JTensor, JTensor]:
+    theta = self.theta
+    comp_dtype = self.fprop_dtype
+
+    one_fp8 = jnp.ones((1,), dtype=jnp.float8_e4m3fn)
+    zero_fp8 = jnp.zeros((1,), dtype=jnp.float8_e4m3fn)
+    scale = jnp.ones((1,), dtype=jnp.float32)
+    x_q = jnp.where(x, one_fp8, zero_fp8) 
+    x_qdq = fp8_ops.dequantize(x_q, x.dtype, scale)
+
+    k_qdq = fp8_ops.in_qdq(
+        comp_dtype,
+        jnp.float8_e4m3fn,
+        k,
+        theta.kernel_scale,
+        theta.kernel_amax_history,
+    )
+    y_qdq = jnp.einsum(
+        equation, x_qdq, k_qdq, _dot_general=fp8_ops.dot_general_with_precision
+    )
+    y = fp8_ops.out_qdq(
+        comp_dtype,
+        jnp.float8_e5m2,
+        y_qdq,
+        theta.output_grad_scale,
+        theta.output_grad_amax_history,
+    )
+
+    if return_quantized_x:
+      return y, x_qdq
+    return y
+
+  def __call__(
+      self, equation: str, *args: JTensor
+  ) -> Union[JTensor, tuple[JTensor, JTensor]]:
+    assert len(args) == 2
+    x = args[0]
+    k = args[1]
+
+    comp_dtype = self.fprop_dtype
+    assert (
+        k.dtype == comp_dtype
+    ), f'k dtype has to be {comp_dtype}, but got {k.dtype}'
+    x = jnp.asarray(x, comp_dtype)
+
+    y = self.quantized_einsum(equation, x, k, return_quantized_x=False)
+
+    return y
+

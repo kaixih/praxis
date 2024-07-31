@@ -662,6 +662,7 @@ class TransformerFeedForwardMoe(base_layer.BaseLayer):
   moe_gating_embedding_level: str = 'token'
   use_gated_activation: bool = False
   einsum_tpl: LayerTpl = template_field(base_ops.EinsumOp)
+  einsum_dispatch_tpl: LayerTpl = template_field(base_ops.EinsumOp)
   einsum_gated_tpl: LayerTpl = template_field(base_ops.EinsumGatedOp)
 
   # SPMD partition related params.
@@ -826,7 +827,7 @@ class TransformerFeedForwardMoe(base_layer.BaseLayer):
     )
     logging.debug('moe wo WeightHParams %s', wo_pc)
     self.create_variable('wo_0', wo_pc)
-    self.create_child('dispatch_einsum', self.einsum_tpl.clone())
+    self.create_child('dispatch_einsum', self.einsum_dispatch_tpl.clone())
     if self._is_ffn1_gated:
       self.create_child('gated_ffn1_einsum', self.einsum_gated_tpl.clone())
     self.create_child('ffn2_einsum', self.einsum_tpl.clone())
